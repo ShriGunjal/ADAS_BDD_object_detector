@@ -1,6 +1,7 @@
 # Dataset utils and dataloaders
 
 import glob
+import json
 import logging
 import math
 import os
@@ -63,31 +64,47 @@ def exif_size(img):
 
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
-                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix=''):
+                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', dataset_type='coco'):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
-        dataset = LoadImagesAndLabels(path, imgsz, batch_size,
-                                      augment=augment,  # augment images
-                                      hyp=hyp,  # augmentation hyperparameters
-                                      rect=rect,  # rectangular training
-                                      cache_images=cache,
-                                      single_cls=opt.single_cls,
-                                      stride=int(stride),
-                                      pad=pad,
-                                      image_weights=image_weights,
-                                      prefix=prefix)
+        # Detect dataset type from path or parameter
+        is_bdd = dataset_type == 'bdd100k' or (isinstance(path, str) and 'bdd' in path.lower()) or (isinstance(path, list) and any('bdd' in str(p).lower() for p in path))
+        
+        if is_bdd:
+            dataset = LoadImagesAndLabelsJSON(path, imgsz, batch_size,
+                                             augment=augment,  # augment images
+                                             hyp=hyp,  # augmentation hyperparameters
+                                             rect=rect,  # rectangular training
+                                             cache_images=cache,
+                                             single_cls=opt.single_cls,
+                                             stride=int(stride),
+                                             pad=pad,
+                                             image_weights=image_weights,
+                                             prefix=prefix)
+        else:
+            dataset = LoadImagesAndLabels(path, imgsz, batch_size,
+                                         augment=augment,  # augment images
+                                         hyp=hyp,  # augmentation hyperparameters
+                                         rect=rect,  # rectangular training
+                                         cache_images=cache,
+                                         single_cls=opt.single_cls,
+                                         stride=int(stride),
+                                         pad=pad,
+                                         image_weights=image_weights,
+                                         prefix=prefix)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
     sampler = torch.utils.data.distributed.DistributedSampler(dataset) if rank != -1 else None
     loader = torch.utils.data.DataLoader if image_weights else InfiniteDataLoader
     # Use torch.utils.data.DataLoader() if dataset.properties will update during training else InfiniteDataLoader()
+    collate_fn = dataset.collate_fn4 if quad else dataset.collate_fn
     dataloader = loader(dataset,
                         batch_size=batch_size,
                         num_workers=nw,
                         sampler=sampler,
                         pin_memory=True,
-                        collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn)
+                        collate_fn=collate_fn)
     return dataloader, dataset
 
 
@@ -1214,6 +1231,319 @@ def pastein(image, labels, sample_labels, sample_images, sample_masks):
                     image[ymin:ymin+r_h, xmin:xmin+r_w] = temp_crop
 
     return labels
+
+
+class LoadImagesAndLabelsJSON(Dataset):  # for BDD100K training/testing with JSON annotations
+    """Dataset loader for BDD100K format with JSON annotations"""
+    
+    # BDD100K class mapping
+    BDD_CLASS_MAP = {
+        'person': 0, 'rider': 1, 'car': 2, 'bus': 3, 'train': 4,
+        'truck': 5, 'bike': 6, 'motor': 7, 'traffic light': 8, 'traffic sign': 9
+    }
+
+    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix=''):
+        self.img_size = img_size
+        self.augment = augment
+        self.hyp = hyp
+        self.image_weights = image_weights
+        self.rect = False if image_weights else rect
+        self.mosaic = self.augment and not self.rect
+        self.mosaic_border = [-img_size // 2, -img_size // 2]
+        self.stride = stride
+        self.path = path
+        
+        # Find JSON annotation files
+        self.json_paths = []
+        if isinstance(path, str):
+            path = [path]
+        
+        for p in path:
+            p = Path(p)
+            if p.is_dir():
+                # Look for JSON files in the directory
+                json_files = list(p.glob('*.json'))
+                self.json_paths.extend(sorted(json_files))
+            elif p.is_file() and str(p).endswith('.json'):
+                self.json_paths.append(p)
+        
+        assert len(self.json_paths) > 0, f'{prefix}No JSON annotation files found in {path}'
+        
+        # Load annotations from all JSON files
+        self.annotations = []
+        self.img_files = []
+        self.labels = []
+        self.shapes = []
+        self.segments = []
+        
+        pbar = tqdm(self.json_paths, desc=f'{prefix}Loading BDD100K JSON annotations')
+        for json_file in pbar:
+            try:
+                with open(json_file, 'r') as f:
+                    json_data = json.load(f)
+                
+                # Handle both list and dict formats
+                if isinstance(json_data, dict):
+                    json_data = [json_data]
+                
+                base_dir = json_file.parent
+                
+                for item in json_data:
+                    img_name = item.get('name')
+                    if not img_name:
+                        continue
+                    
+                    # Try multiple possible image locations
+                    # Path hierarchy: .../assignment_data_bdd/
+                    #                 ├── bdd100k_labels_release/bdd100k/labels/ (JSON files here)
+                    #                 └── bdd100k_images_100k/bdd100k/images/100k/train/ (Images here)
+                    
+                    possible_paths = [
+                        base_dir / img_name,  # Same directory as JSON
+                        base_dir.parent / 'images' / img_name,  # ../images/
+                        base_dir.parent.parent.parent / 'bdd100k_images_100k' / 'bdd100k' / 'images' / '100k' / 'train' / img_name,  # Sibling: bdd100k_images_100k/train
+                        base_dir.parent.parent.parent / 'bdd100k_images_100k' / 'bdd100k' / 'images' / '100k' / 'val' / img_name,  # Sibling: bdd100k_images_100k/val
+                        base_dir.parent.parent.parent / 'bdd100k_images_100k' / 'bdd100k' / 'images' / '100k' / 'test' / img_name,  # Sibling: bdd100k_images_100k/test
+                    ]
+                    
+                    img_path = None
+                    for p in possible_paths:
+                        if p.exists():
+                            img_path = p
+                            break
+                    
+                    if img_path is None:
+                        continue
+                    
+                    # Read image dimensions
+                    try:
+                        img = Image.open(img_path)
+                        img.verify()
+                        width, height = img.size
+                    except:
+                        continue
+                    
+                    # Extract bounding boxes
+                    labels_array = []
+                    for label_obj in item.get('labels', []):
+                        category = label_obj.get('category', '')
+                        
+                        # Only include object detection boxes (skip polygons like lanes, drivable areas)
+                        if 'box2d' not in label_obj or category not in self.BDD_CLASS_MAP:
+                            continue
+                        
+                        box2d = label_obj['box2d']
+                        x1, y1, x2, y2 = box2d['x1'], box2d['y1'], box2d['x2'], box2d['y2']
+                        
+                        # Clamp coordinates to image boundaries
+                        x1 = max(0, min(x1, width))
+                        x2 = max(0, min(x2, width))
+                        y1 = max(0, min(y1, height))
+                        y2 = max(0, min(y2, height))
+                        
+                        # Skip invalid boxes
+                        if x1 >= x2 or y1 >= y2:
+                            continue
+                        
+                        # Convert to YOLO format: [class_id, x_center_norm, y_center_norm, width_norm, height_norm]
+                        class_id = self.BDD_CLASS_MAP[category]
+                        x_center = (x1 + x2) / 2.0 / width
+                        y_center = (y1 + y2) / 2.0 / height
+                        w_norm = (x2 - x1) / width
+                        h_norm = (y2 - y1) / height
+                        
+                        labels_array.append([class_id, x_center, y_center, w_norm, h_norm])
+                    
+                    # Add to dataset
+                    self.img_files.append(str(img_path))
+                    self.labels.append(np.array(labels_array, dtype=np.float32) if labels_array else np.zeros((0, 5), dtype=np.float32))
+                    self.shapes.append((height, width))
+                    self.segments.append([])  # No segments for BDD
+            except Exception as e:
+                logger.warning(f'{prefix}Error loading {json_file}: {e}')
+                continue
+        
+        self.img_files = self.img_files
+        self.labels = self.labels
+        self.shapes = np.array(self.shapes, dtype=np.float64)
+        
+        assert len(self.img_files) > 0, f'{prefix}No valid images found in BDD100K dataset'
+        
+        n = len(self.shapes)
+        bi = np.floor(np.arange(n) / batch_size).astype(int)
+        nb = bi[-1] + 1
+        self.batch = bi
+        self.n = n
+        self.indices = range(n)
+        
+        # Rectangular Training
+        if self.rect:
+            s = self.shapes
+            ar = s[:, 1] / s[:, 0]
+            irect = ar.argsort()
+            self.img_files = [self.img_files[i] for i in irect]
+            self.labels = [self.labels[i] for i in irect]
+            self.shapes = s[irect]
+            ar = ar[irect]
+            
+            shapes = [[1, 1]] * nb
+            for i in range(nb):
+                ari = ar[bi == i]
+                mini, maxi = ari.min(), ari.max()
+                if maxi < 1:
+                    shapes[i] = [maxi, 1]
+                elif mini > 1:
+                    shapes[i] = [1, 1 / mini]
+            
+            self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(int) * stride
+        
+        # Cache images into memory
+        self.imgs = [None] * n
+        if cache_images:
+            if cache_images == 'disk':
+                self.im_cache_dir = Path(Path(self.img_files[0]).parent.as_posix() + '_npy')
+                self.img_npy = [self.im_cache_dir / Path(f).with_suffix('.npy').name for f in self.img_files]
+                self.im_cache_dir.mkdir(parents=True, exist_ok=True)
+            gb = 0
+            self.img_hw0, self.img_hw = [None] * n, [None] * n
+            results = ThreadPool(8).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))
+            pbar = tqdm(enumerate(results), total=n)
+            for i, x in pbar:
+                if cache_images == 'disk':
+                    if not self.img_npy[i].exists():
+                        np.save(self.img_npy[i].as_posix(), x[0])
+                    gb += self.img_npy[i].stat().st_size
+                else:
+                    self.imgs[i], self.img_hw0[i], self.img_hw[i] = x
+                    gb += self.imgs[i].nbytes
+                pbar.desc = f'{prefix}Caching BDD100K images ({gb / 1E9:.1f}GB)'
+            pbar.close()
+    
+    def __len__(self):
+        return len(self.img_files)
+    
+    def __getitem__(self, index):
+        index = self.indices[index]
+        
+        hyp = self.hyp
+        mosaic = self.mosaic and random.random() < hyp['mosaic']
+        
+        if mosaic:
+            # Load mosaic
+            if random.random() < 0.8:
+                img, labels = load_mosaic(self, index)
+            else:
+                img, labels = load_mosaic9(self, index)
+            shapes = None
+            
+            # MixUp
+            if random.random() < hyp['mixup']:
+                if random.random() < 0.8:
+                    img2, labels2 = load_mosaic(self, random.randint(0, len(self.labels) - 1))
+                else:
+                    img2, labels2 = load_mosaic9(self, random.randint(0, len(self.labels) - 1))
+                r = np.random.beta(8.0, 8.0)
+                img = (img * r + img2 * (1 - r)).astype(np.uint8)
+                labels = np.concatenate((labels, labels2), 0)
+        else:
+            # Load image
+            img, (h0, w0), (h, w) = load_image(self, index)
+            
+            # Letterbox
+            shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size
+            img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
+            shapes = (h0, w0), ((h / h0, w / w0), pad)
+            
+            labels = self.labels[index].copy()
+            if labels.size:
+                labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
+        
+        if self.augment:
+            # Augment imagespace
+            if not mosaic:
+                img, labels = random_perspective(img, labels,
+                                                degrees=hyp['degrees'],
+                                                translate=hyp['translate'],
+                                                scale=hyp['scale'],
+                                                shear=hyp['shear'],
+                                                perspective=hyp['perspective'])
+            
+            # Augment colorspace
+            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+            
+            if random.random() < hyp['paste_in']:
+                sample_labels, sample_images, sample_masks = [], [], []
+                while len(sample_labels) < 30:
+                    sample_labels_, sample_images_, sample_masks_ = load_samples(self, random.randint(0, len(self.labels) - 1))
+                    sample_labels += sample_labels_
+                    sample_images += sample_images_
+                    sample_masks += sample_masks_
+                    if len(sample_labels) == 0:
+                        break
+                labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
+        
+        nL = len(labels)
+        if nL:
+            labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])
+            labels[:, [2, 4]] /= img.shape[0]
+            labels[:, [1, 3]] /= img.shape[1]
+        
+        if self.augment:
+            # flip up-down
+            if random.random() < hyp['flipud']:
+                img = np.flipud(img)
+                if nL:
+                    labels[:, 2] = 1 - labels[:, 2]
+            
+            # flip left-right
+            if random.random() < hyp['fliplr']:
+                img = np.fliplr(img)
+                if nL:
+                    labels[:, 1] = 1 - labels[:, 1]
+        
+        labels_out = torch.zeros((nL, 6))
+        if nL:
+            labels_out[:, 1:] = torch.from_numpy(labels)
+        
+        # Convert
+        img = img[:, :, ::-1].transpose(2, 0, 1)
+        img = np.ascontiguousarray(img)
+        
+        return torch.from_numpy(img), labels_out, self.img_files[index], shapes
+    
+    @staticmethod
+    def collate_fn(batch):
+        img, label, path, shapes = zip(*batch)
+        for i, l in enumerate(label):
+            l[:, 0] = i
+        return torch.stack(img, 0), torch.cat(label, 0), path, shapes
+    
+    @staticmethod
+    def collate_fn4(batch):
+        img, label, path, shapes = zip(*batch)
+        n = len(shapes) // 4
+        img4, label4, path4, shapes4 = [], [], path[:n], shapes[:n]
+        
+        ho = torch.tensor([[0., 0, 0, 1, 0, 0]])
+        wo = torch.tensor([[0., 0, 1, 0, 0, 0]])
+        s = torch.tensor([[1, 1, .5, .5, .5, .5]])
+        for i in range(n):
+            i *= 4
+            if random.random() < 0.5:
+                im = F.interpolate(img[i].unsqueeze(0).float(), scale_factor=2., mode='bilinear', align_corners=False)[
+                    0].type(img[i].type())
+                l = label[i]
+            else:
+                im = torch.cat((torch.cat((img[i], img[i + 1]), 1), torch.cat((img[i + 2], img[i + 3]), 1)), 2)
+                l = torch.cat((label[i], label[i + 1] + ho, label[i + 2] + wo, label[i + 3] + ho + wo), 0) * s
+            img4.append(im)
+            label4.append(l)
+        
+        for i, l in enumerate(label4):
+            l[:, 0] = i
+        
+        return torch.stack(img4, 0), torch.cat(label4, 0), path4, shapes4
 
 class Albumentations:
     # YOLOv5 Albumentations class (optional, only used if package is installed)

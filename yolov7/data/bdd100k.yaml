@@ -1,0 +1,10 @@
+
+# train and val data as directory paths containing JSON annotation files
+train: /workspace/data_store/assignment_data_bdd/bdd100k_labels_release/bdd100k/labels  # bdd100k_labels_images_train.json
+val: /workspace/data_store/assignment_data_bdd/bdd100k_labels_release/bdd100k/labels    # bdd100k_labels_images_val.json
+
+# number of classes
+nc: 10
+
+# class names
+names: ['person', 'rider', 'car', 'bus','train', 'truck', 'bike',  'motor','traffic light','traffic sign']

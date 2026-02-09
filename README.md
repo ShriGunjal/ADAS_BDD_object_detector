@@ -103,18 +103,35 @@ Training output will be saved to `runs/train/exp/`
 
 Training results and performance metrics are available in the `snap_ui/` folder:
 
+**Overall Training Results:**
+![Training Results](snap_ui/results.png)
+
 **Performance Curves:**
-- **Precision-Recall Curve** (`snap_ui/PR_curve.png`) - Overall PR performance
-- **F1-Score Curve** (`snap_ui/F1_curve.png`) - F1 score vs confidence threshold
-- **Precision Curve** (`snap_ui/P_curve.png`) - Precision vs confidence threshold
-- **Recall Curve** (`snap_ui/R_curve.png`) - Recall vs confidence threshold
-- **Confusion Matrix** (`snap_ui/confusion_matrix.png`) - Detailed class-wise performance
-- **Training Results** (`snap_ui/results.png`) - Training/validation loss and metrics over epochs
+
+![Precision-Recall Curve](snap_ui/PR_curve.png)
+*Precision-Recall Curve - Overall PR performance*
+
+![F1-Score Curve](snap_ui/F1_curve.png)
+*F1-Score Curve - F1 score vs confidence threshold*
+
+![Precision Curve](snap_ui/P_curve.png)
+*Precision Curve - Precision vs confidence threshold*
+
+![Recall Curve](snap_ui/R_curve.png)
+*Recall Curve - Recall vs confidence threshold*
+
+![Confusion Matrix](snap_ui/confusion_matrix.png)
+*Confusion Matrix - Detailed class-wise performance*
 
 **Sample Detection Results:**
-Detection results on test images are available in `snap_ui/detections_results/`:
-- Example detections showing ADAS object detection capabilities
-- Classes detected: vehicles, pedestrians, traffic signs, cyclists, etc.
+
+Detection results on test BDD100k images showing ADAS object detection capabilities:
+- Classes detected: vehicles, buses, pedestrians, cyclists, traffic signs, traffic lights
+- Real-world driving scenarios from the BDD100k dataset
+
+Example detections:
+![Detection Sample 1](snap_ui/detections_results/cad7fdff-d9946f73.jpg)
+![Detection Sample 2](snap_ui/detections_results/caf56f7a-1407df75.jpg)
 
 ### 8. Run Inference on Test Data (inside container terminal)
 

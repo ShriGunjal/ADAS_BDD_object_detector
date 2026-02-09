@@ -1,0 +1,13 @@
+# Image files (large files)
+data_store/assignment_data_bdd/
+data_store/test_data/
+data_store/*.csv
+
+# Python
+__pycache__/
+
+.venv
+venv
+env
+*.pkl
+.ipynb_checkpoints

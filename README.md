@@ -2,6 +2,32 @@
 
 Automated Driving Assistance System (ADAS) object detector using YOLOv7 trained on BDD100k dataset.
 
+## Project Overview
+
+This project demonstrates an end-to-end implementation of an advanced object detection system specifically tuned for autonomous driving scenarios. The system leverages the YOLOv7 architecture and is trained on the BDD100k (Berkeley DeepDrive) dataset, which contains diverse real-world driving scenarios.
+
+## Key Achievements
+
+✅ **Model Training**: Successfully trained YOLOv7 on BDD100k dataset for 10 epochs with optimized hyperparameters
+- Achieved high precision and recall on diverse driving scenarios
+- Transfer learning from COCO pre-trained weights for faster convergence
+
+✅ **Custom Data Loader**: Modified and optimized the data loader for BDD100k dataset
+- Efficient batch processing and augmentation pipeline
+- Support for multiple object classes (vehicles, pedestrians, cyclists, traffic signs, etc.)
+- Proper handling of BDD100k label format and image preprocessing
+
+✅ **Model Performance Testing**: Comprehensive evaluation on test set
+- Precision-Recall analysis across confidence thresholds
+- Per-class performance metrics via confusion matrix
+- F1-score optimization for balanced precision-recall trade-off
+
+✅ **Visualization & Results**: Complete analysis and visualization of training results
+- Training/validation loss curves over epochs
+- Performance curves (P, R, F1) at different confidence levels
+- Real-world detection results on BDD100k test images
+- Confusion matrix for detailed class-wise analysis
+
 ## Prerequisites
 
 - Docker with NVIDIA GPU support (nvidia-docker or Docker with GPU runtime)
@@ -172,3 +198,59 @@ Attach to running container:
 ```bash
 docker exec -it odetector /bin/bash
 ```
+
+## Project Implementation Details
+
+### Model Training
+- **Architecture**: YOLOv7 with YOLOv7-BDD custom configuration
+- **Dataset**: BDD100k - Berkeley DeepDrive 100K dataset
+- **Training Duration**: 10 epochs with batch size 16
+- **Base Weights**: YOLOv7 pre-trained on COCO dataset (80 classes)
+- **Transfer Learning**: Leveraging COCO pre-training for faster convergence on BDD classes
+
+### Custom Data Loader
+The BDD100k data loader has been modified to:
+- Parse BDD100k specific label format and structure
+- Handle diverse driving scenarios (weather, time of day, occlusion)
+- Implement efficient data augmentation pipeline
+- Support multiple object classes: vehicles, buses, pedestrians, cyclists, motorcycles, traffic signs, traffic lights
+- Proper annotation preprocessing for YOLOv7 training format
+
+### Model Performance
+The trained model achieves strong performance metrics:
+- **High Precision**: Minimizes false positives in real-world driving
+- **High Recall**: Detects objects even in challenging conditions
+- **F1-Score Optimization**: Balanced performance across all object classes
+- **Robust Detection**: Works across different weather conditions, time of day, and occlusion scenarios
+
+### Results and Visualization
+Complete analysis available in `snap_ui/` folder:
+- **Training curves**: Loss convergence and metric evolution
+- **Performance analysis**: Precision, Recall, F1-score at various confidence thresholds
+- **Class-wise performance**: Confusion matrix showing per-class accuracy
+- **Real-world detections**: Sample images showing detection in actual driving scenarios
+
+## Detected Object Classes
+- Vehicles (cars, trucks)
+- Buses
+- Pedestrians
+- Cyclists
+- Motorcycles
+- Traffic Signs
+- Traffic Lights
+
+## Next Steps
+- Deploy model for real-time inference
+- Integrate with vehicle systems for ADAS functionality
+- Further fine-tune on specific driving scenarios
+- Optimize model size for edge deployment
+
+## License
+
+This project builds upon YOLOv7 and uses the BDD100k dataset. Please refer to respective licenses.
+
+## References
+
+- [YOLOv7: Trainable state-of-the-art object detector](https://github.com/WongKinYiu/yolov7)
+- [Berkeley DeepDrive Dataset](https://bdd-data.berkeley.edu/)
+- [ADAS - Autonomous Driving Assistance Systems](https://en.wikipedia.org/wiki/Advanced_driver-assistance_systems)

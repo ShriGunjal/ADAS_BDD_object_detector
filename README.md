@@ -198,6 +198,7 @@ Visual analysis of True Positives (TP), False Positives (FP), and False Negative
 - 🟢 **Green Boxes (TP)**: Correctly detected objects
 - 🔴 **Red Boxes (FP)**: Predicted but incorrect detections  
 - 🟡 **Yellow Boxes (FN)**: Missed ground truth objects
+- ⚪ **White Boxes (GT)**: Ground truth boxes that matched with TP boxes - shown for reference to visualize closeness with predicted TP boxes
 
 **Representative Validation Results:**
 

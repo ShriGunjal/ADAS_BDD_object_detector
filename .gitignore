@@ -11,3 +11,9 @@ venv
 env
 *.pkl
 .ipynb_checkpoints
+Evaluations/predicted_labels/
+Evaluations/eval_vis/
+Evaluations/eval_vis_tpfpfn/
+Evaluations/valdata_analysis_results.json
+
+

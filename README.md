@@ -63,6 +63,8 @@ After `cd ADAS_BDD_object_detector`, run:
 docker run --name odetector -it --gpus all \
   -v ./data_store/:/workspace/data_store/ \
   -v ./yolov7/:/workspace/yolov7/ \
+  -v ./Evaluations/:/workspace/Evaluations/ \
+  -v ./export_models/:/workspace/export_models/ \
   -p 8888:8888 \
   --hostname localhost \
   --shm-size=64g \
@@ -159,7 +161,92 @@ Example detections:
 ![Detection Sample 1](snap_ui/detections_results/cad7fdff-d9946f73.jpg)
 ![Detection Sample 2](snap_ui/detections_results/caf56f7a-1407df75.jpg)
 
-### 8. Run Inference on Test Data (inside container terminal)
+### 8. Comprehensive Validation Results & Metrics on BDD100k Val Data
+
+Complete evaluation metrics available in the [Evaluations/evaluations.ipynb](Evaluations/evaluations.ipynb) notebook with detailed performance analysis.
+
+#### Evaluation Configuration
+
+The validation uses carefully tuned inference and evaluation parameters:
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| **Confidence Threshold** | 0.25 | Detection confidence cutoff |
+| **IoU Threshold** | 0.5 | Intersection over Union for matching predictions to ground truth |
+| **NMS Threshold** | 0.45 | Non-Maximum Suppression overlap threshold |
+| **Validation Data** | BDD100k Validation Split | Diverse real-world driving scenarios |
+| **Fine-tuned Classes** | 10 classes | Person, Rider, Car, Bus, Train, Truck, Motorcycle, Bike, Traffic Light, Traffic Sign |
+
+👉 **For detailed metrics, run the evaluation notebook:**
+```bash
+cd /workspace/Evaluations
+jupyter notebook evaluations.ipynb
+```
+
+The notebook computes:
+- **Overall Metrics**: Precision, Recall, F1-Score, TP/FP/FN counts
+- **Class-wise Performance**: Per-class metrics for all 10 object categories
+- **Size-wise Recall**: Performance across small, medium, and large objects
+
+---
+
+#### Detection Performance Visualization
+
+Visual analysis of True Positives (TP), False Positives (FP), and False Negatives (FN) across validation images:
+
+**Color Legend:**
+- 🟢 **Green Boxes (TP)**: Correctly detected objects
+- 🔴 **Red Boxes (FP)**: Predicted but incorrect detections  
+- 🟡 **Yellow Boxes (FN)**: Missed ground truth objects
+
+**Representative Validation Results:**
+
+##### Urban Complex Scenes
+
+![Evaluation Result 1](Evaluations/visualize_TP_FP_FN/b1d0a191-03dcecc2_TP32_FP10_FN6.png)
+*Complex urban environment with multiple vehicles, pedestrians, and traffic infrastructure*
+
+![Evaluation Result 2](Evaluations/visualize_TP_FP_FN/b1d0a191-2ed2269e_TP26_FP10_FN8.png)
+*Densely populated scene with diverse object classes and occlusions*
+
+##### Mixed Traffic Scenarios
+
+![Evaluation Result 3](Evaluations/visualize_TP_FP_FN/b1ceb32e-51852abe_TP12_FP4_FN2.png)
+*Balanced traffic scene with vehicles, pedestrians, and cyclists*
+
+![Evaluation Result 4](Evaluations/visualize_TP_FP_FN/b1cd1e94-549d0bfe_TP12_FP2_FN1.png)
+*High precision detection with minimal false alerts*
+
+##### Varied Scenarios
+
+![Evaluation Result 5](Evaluations/visualize_TP_FP_FN/b1f4491b-09593e90_TP4_FP2_FN0.png)
+*Sparse traffic with complete object detection*
+
+![Evaluation Result 6](Evaluations/visualize_TP_FP_FN/b3e08585-cb03a2fb_TP10_FP2_FN1.png)
+*Intersection scene with multiple vehicle and pedestrian interactions*
+
+---
+
+#### Performance Analysis by Object Type
+
+The evaluation notebook provides detailed analysis for:
+
+1. **Overall Detection Performance** - Aggregate precision, recall, and F1-score metrics
+2. **Per-Class Metrics** - Individual performance for:
+   - Person, Rider, Car, Bus, Train, Truck
+   - Motorcycle, Bike, Traffic Light, Traffic Sign
+3. **Size-based Performance** - Recall analysis for:
+   - Small objects (<32×32 pixels)
+   - Medium objects (32×96 pixels)  
+   - Large objects (>96×96 pixels)
+
+**🔍 Navigate to the evaluation notebook to see:**
+- Precision/Recall values for each class
+- True Positive, False Positive, False Negative counts
+- Per-size performance breakdown
+- Confusion matrix analysis
+
+### 9. Run Inference on Test Data (inside container terminal)
 
 ```bash
 cd /workspace/yolov7
@@ -172,7 +259,7 @@ Or use the pre-trained best model from OneDrive:
 python detect.py --weights runs/train/exp/weights/best.pt --source /workspace/data_store/test_data/
 ```
 
-### 9. Jupyter Notebook for Results Visualization (Optional)
+### 10. Jupyter Notebook for Results Visualization (Optional)
 
 From another terminal on your host machine (keep the container running):
 
@@ -182,7 +269,7 @@ docker exec -it odetector jupyter notebook --ip=0.0.0.0 --allow-root --no-browse
 
 Then open browser: `http://localhost:8888`
 
-### 10. Stopping and Restarting
+### 11. Stopping and Restarting
 
 Stop container:
 ```bash
@@ -253,4 +340,3 @@ This project builds upon YOLOv7 and uses the BDD100k dataset. Please refer to re
 
 - [YOLOv7: Trainable state-of-the-art object detector](https://github.com/WongKinYiu/yolov7)
 - [Berkeley DeepDrive Dataset](https://bdd-data.berkeley.edu/)
-- [ADAS - Autonomous Driving Assistance Systems](https://en.wikipedia.org/wiki/Advanced_driver-assistance_systems)

@@ -43,5 +43,5 @@ python infer_tensorrt.py
 
 6. Output images from TensorRT inference should be saved to a folder (for example `trt_outputs/`). Add those images to the README by placing them under the repository and embedding like:
 
-![TRT output example](export_models/trt_outputs/b1cebfb7-284f5117.jpg)
+![TRT output example](export_models/trt_outputs/b1ca2e5d-84cf9134.jpg)
 ![TRT output example 2](export_models/trt_outputs/b2bdb7b6-d34fab57.jpg)

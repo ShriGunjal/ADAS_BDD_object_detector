@@ -71,6 +71,74 @@ The evaluation uses the following parameters to match predictions with ground tr
 
 ---
 
+## Evaluation Results Summary (conf=0.25, IoU=0.5)
+
+### Overall Metrics
+
+Precision, recall and F1 at confidence threshold = 0.25 and IoU = 0.5:
+
+```
+tp: 136351
+fp: 48393
+fn: 49175
+precision: 0.7380537392283376
+recall: 0.7349428112501751
+f1_score: 0.7364949901423287
+```
+
+### Per-class Metrics (conf=0.25, IoU=0.5)
+
+Class ID | TP | FP | FN | Precision | Recall
+---|---:|---:|---:|---:|---:
+2 | 79107 | 21539 | 23399 | 0.7859924885241341 | 0.7717304352915927
+9 | 24877 | 11397 | 10031 | 0.6858080167613166 | 0.7126446659791452
+8 | 18971 | 8993 | 7914 | 0.6784079530825347 | 0.705635112516273
+1 | 336 | 274 | 313 | 0.5508196721311476 | 0.5177195685670262
+7 | 218 | 93 | 234 | 0.7009646302250804 | 0.4823008849557522
+5 | 2775 | 1615 | 1470 | 0.6321184510250569 | 0.6537102473498233
+0 | 8593 | 3694 | 4669 | 0.6993570440302759 | 0.6479414869552104
+3 | 951 | 403 | 646 | 0.7023633677991138 | 0.5954915466499687
+6 | 523 | 385 | 484 | 0.5759911894273128 | 0.519364448857994
+4 | 0 | 0 | 15 | 0.0 | 0.0
+
+Note: Class IDs correspond to the dataset label IDs used in the evaluation pipeline.
+
+### Size-wise Recall (conf=0.25, IoU=0.5)
+
+Size | TP | FN | Recall
+---|---:|---:|---:
+medium | 50012 | 9657 | 0.8381571670381606
+small  | 64340 | 38389 | 0.6263080532274236
+large  | 21999 | 1129 | 0.9511847111726046
+
+### Dataset / Label Distribution
+
+- Unique image names in train data: 69863
+- Unique image names in val data: 10000
+
+Label boxes:
+
+```
+train: 1286871
+val: 185526
+```
+
+Category distribution (train / val):
+
+Category | train | val
+---|---:|---:
+bike | 7210 | 1007
+bus | 11672 | 1597
+car | 713211 | 102506
+motor | 3002 | 452
+person | 91349 | 13262
+rider | 4517 | 649
+traffic light | 186117 | 26885
+traffic sign | 239686 | 34908
+train | 136 | 15
+truck | 29971 | 4245
+
+
 ## 📈 Metrics Computed
 
 The evaluation notebook computes three types of performance metrics:

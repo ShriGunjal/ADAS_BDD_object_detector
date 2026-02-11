@@ -2,6 +2,20 @@
 
 Automated Driving Assistance System (ADAS) object detector using YOLOv7 trained on BDD100k dataset.
 
+## Executive Summary
+
+This project implements an end-to-end object detection pipeline for ADAS scenarios using the BDD100k dataset.
+
+The work covers:
+- Structured dataset analysis and distribution study
+- Custom data loading and YOLOv7 configuration
+- Transfer learning using pretrained weights
+- IoU-based evaluation at 0.5 threshold
+- Per-class and size-based performance analysis
+- TP/FP/FN qualitative visualization for failure inspection
+
+The goal was not only to train a detector but to analyze model behavior and connect dataset characteristics to performance outcomes.
+
 ## Project Overview
 
 This project demonstrates an end-to-end implementation of an advanced object detection system specifically tuned for autonomous driving scenarios. The system leverages the YOLOv7 architecture and is trained on the BDD100k (Berkeley DeepDrive) dataset, which contains diverse real-world driving scenarios.
@@ -95,6 +109,15 @@ This notebook provides:
 
 **Recommendation:** Complete this analysis first to ensure data integrity before proceeding with training.
 
+#### Key Dataset Insights
+
+- Significant class imbalance observed across detection categories.
+- Cars dominate the dataset compared to rider/bike/motor.
+- Small objects (e.g., traffic lights) occupy very small image area percentages.
+- Scene attributes (weather, time-of-day) show uneven distribution.
+- Some attribute inconsistencies were identified (e.g., traffic light color labeling).
+
+
 ### 5. Download Pre-trained Weights and Models (Optional)
 
 Pre-trained YOLOv7 weights and models trained on BDD dataset are available at:
@@ -177,6 +200,83 @@ The validation uses carefully tuned inference and evaluation parameters:
 | **Validation Data** | BDD100k Validation Split | Diverse real-world driving scenarios |
 | **Fine-tuned Classes** | 10 classes | Person, Rider, Car, Bus, Train, Truck, Motorcycle, Bike, Traffic Light, Traffic Sign |
 
+### Evaluation Scope
+
+Evaluation is performed at:
+- IoU threshold = 0.5
+- Confidence threshold = 0.25
+- NMS threshold = 0.45
+
+This evaluation reports operating-point performance (precision, recall, F1).
+COCO-style mAP across multiple IoU thresholds is not computed in this implementation.
+
+## Evaluation Results Summary (conf=0.25, IoU=0.5)
+
+### Overall Metrics
+
+Precision, recall and F1 at confidence threshold = 0.25 and IoU = 0.5:
+
+```
+tp: 136351
+fp: 48393
+fn: 49175
+precision: 0.7380537392283376
+recall: 0.7349428112501751
+f1_score: 0.7364949901423287
+```
+
+### Per-class Metrics (conf=0.25, IoU=0.5)
+
+Class ID | TP | FP | FN | Precision | Recall
+---|---:|---:|---:|---:|---:
+2 | 79107 | 21539 | 23399 | 0.7859924885241341 | 0.7717304352915927
+9 | 24877 | 11397 | 10031 | 0.6858080167613166 | 0.7126446659791452
+8 | 18971 | 8993 | 7914 | 0.6784079530825347 | 0.705635112516273
+1 | 336 | 274 | 313 | 0.5508196721311476 | 0.5177195685670262
+7 | 218 | 93 | 234 | 0.7009646302250804 | 0.4823008849557522
+5 | 2775 | 1615 | 1470 | 0.6321184510250569 | 0.6537102473498233
+0 | 8593 | 3694 | 4669 | 0.6993570440302759 | 0.6479414869552104
+3 | 951 | 403 | 646 | 0.7023633677991138 | 0.5954915466499687
+6 | 523 | 385 | 484 | 0.5759911894273128 | 0.519364448857994
+4 | 0 | 0 | 15 | 0.0 | 0.0
+
+Note: Class IDs correspond to the dataset label IDs used in the evaluation pipeline.
+
+### Size-wise Recall (conf=0.25, IoU=0.5)
+
+Size | TP | FN | Recall
+---|---:|---:|---:
+medium | 50012 | 9657 | 0.8381571670381606
+small  | 64340 | 38389 | 0.6263080532274236
+large  | 21999 | 1129 | 0.9511847111726046
+
+### Dataset / Label Distribution
+
+- Unique image names in train data: 69863
+- Unique image names in val data: 10000
+
+Label boxes:
+
+```
+train: 1286871
+val: 185526
+```
+
+Category distribution (train / val):
+
+Category | train | val
+---|---:|---:
+bike | 7210 | 1007
+bus | 11672 | 1597
+car | 713211 | 102506
+motor | 3002 | 452
+person | 91349 | 13262
+rider | 4517 | 649
+traffic light | 186117 | 26885
+traffic sign | 239686 | 34908
+train | 136 | 15
+truck | 29971 | 4245
+
 👉 **For detailed metrics, run the evaluation notebook:**
 ```bash
 cd /workspace/Evaluations
@@ -248,7 +348,16 @@ The evaluation notebook provides detailed analysis for:
 - Confusion matrix analysis
 
 ### 9. Run Inference on Test Data (inside container terminal)
+## Performance Observations
 
+- High recall observed for large objects such as cars.
+- Lower recall for small objects (traffic lights, distant objects).
+- False positives occur in cluttered urban backgrounds.
+- Size-based recall confirms performance degradation on small objects.
+
+The small-object performance trend aligns with the box-size distribution observed during dataset analysis.
+
+### 9. Run Inference on Test Data (inside container terminal)
 ```bash
 cd /workspace/yolov7
 python detect.py --weights runs/train/exp/weights/best.pt --source /workspace/data_store/test_data/
@@ -332,6 +441,14 @@ Complete analysis available in `snap_ui/` folder:
 - Integrate with vehicle systems for ADAS functionality
 - Further fine-tune on specific driving scenarios
 - Optimize model size for edge deployment
+
+## Potential Improvements
+
+- Increase input resolution to improve small-object recall.
+- Apply multi-scale training.
+- Perform confidence threshold sweep to optimize precision-recall tradeoff.
+- Extend evaluation to compute COCO-style AP and PR curves.
+- Address class imbalance using weighted sampling or focal loss.
 
 ## License
 
